@@ -59,6 +59,7 @@ export default function Studio() {
     } catch (e) { setSaveState("Save failed"); throw e; }
   }, []);
   const openProject = async (next: Project) => {
+    if (next.id === projectRef.current?.id) return;
     try {
       if (projectRef.current) await persist(projectRef.current);
       stop(); setPosition(0);

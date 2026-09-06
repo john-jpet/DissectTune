@@ -14,3 +14,8 @@ frontend/.env.local
 
 # OS
 .DS_Store
+*.tsbuildinfo
+.pytest_cache/
+frontend/test-results/
+frontend/playwright-report/
+artifacts/

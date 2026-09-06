@@ -31,12 +31,15 @@ export class Mixer {
   startedAt = 0;
   position = 0;
   playing = false;
+  generation = 0;
   constructor() {
     this.context = new AudioContext({ sampleRate: 44100 });
     this.master = this.context.createGain();
     this.master.connect(this.context.destination);
   }
   async load(tracks: TrackStatusResponse[], signal: AbortSignal, progress: (done: number, total: number) => void) {
+    const estimatedBytes = tracks.reduce((total, t) => total + (t.duration || 0) * 44100 * 2 * 4 * t.stems.length, 0);
+    if (estimatedBytes > 512 * 1024 * 1024) throw new Error("This mix exceeds the browser's 512 MB audio budget. Use shorter tracks or fewer songs.");
     const stems = tracks.flatMap(t => t.stems);
     const keep = new Set(stems.map(s => s.id));
     for (const id of this.buffers.keys()) if (!keep.has(id)) this.buffers.delete(id);
@@ -54,14 +57,18 @@ export class Mixer {
   }
   currentTime() { return this.playing ? Math.max(0, this.context.currentTime - this.startedAt) : this.position; }
   stop() {
+    this.generation++;
     this.position = this.currentTime();
     this.playing = false;
     for (const { source, gain } of this.nodes) { source.stop(); source.disconnect(); gain.disconnect(); }
     this.nodes = [];
   }
   async play(composition: Composition, tracks: TrackStatusResponse[], position = this.position) {
+    this.stop();
+    const generation = this.generation;
     await this.context.resume();
-    this.stop(); this.position = position;
+    if (generation !== this.generation) return;
+    this.position = position;
     const when = this.context.currentTime + 0.04;
     this.startedAt = when - position;
     this.master.gain.value = composition.master_volume;
