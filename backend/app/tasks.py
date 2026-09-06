@@ -1,69 +1,56 @@
 import os
 import tempfile
-import urllib.request
 import uuid
-
+from botocore.exceptions import ConnectionClosedError, EndpointConnectionError, ReadTimeoutError
 from app.celery_app import celery_app
-from app.config import settings
 from app.database import SessionLocal
 from app.models import Stem, StemType, Track, TrackStatus
 from app.services.analysis import analyze_bpm_and_key
 from app.services.separation import separate_stems
-from app.services.storage import build_key, upload_file
+from app.services.storage import download_to_path, upload_file
 
 
-def _to_internal_url(public_url: str) -> str:
-    """Rewrite a stored public object URL to the worker-reachable internal one."""
-    if not settings.s3_internal_base_url:
-        return public_url
-    return public_url.replace(settings.s3_public_base_url, settings.s3_internal_base_url, 1)
-
-
-@celery_app.task(name="app.tasks.process_track", bind=True, max_retries=2)
+@celery_app.task(name="app.tasks.process_track", bind=True, max_retries=2,
+                soft_time_limit=3900, time_limit=3960)
 def process_track(self, track_id: str):
     db = SessionLocal()
     try:
-        track = db.query(Track).filter(Track.id == uuid.UUID(track_id)).first()
-        if track is None:
-            return
-
-        track.status = TrackStatus.processing
-        db.add(track)
+        claimed = db.query(Track).filter(Track.id == uuid.UUID(track_id),
+            Track.status == TrackStatus.pending).update({
+                Track.status: TrackStatus.processing, Track.stage: "analyzing"})
         db.commit()
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            local_input = os.path.join(tmp_dir, track.original_filename)
-            urllib.request.urlretrieve(_to_internal_url(track.file_url), local_input)
-
-            bpm, key = analyze_bpm_and_key(local_input)
-
-            stem_paths = separate_stems(local_input)
-
-            for stem_type_str, local_stem_path in stem_paths.items():
-                key_path = build_key("stems", track_id, f"{stem_type_str}.wav")
-                stem_url = upload_file(local_stem_path, key_path, content_type="audio/wav")
-
-                stem = Stem(
-                    track_id=track.id,
-                    stem_type=StemType(stem_type_str),
-                    stem_url=stem_url,
-                )
-                db.add(stem)
-
-            track.bpm = bpm
-            track.musical_key = key
-            track.status = TrackStatus.completed
-            db.add(track)
+        if not claimed:
+            return
+        track = db.get(Track, uuid.UUID(track_id))
+        with tempfile.TemporaryDirectory(prefix="dissecttune_") as tmp:
+            local = os.path.join(tmp, "source" + os.path.splitext(track.original_filename)[1].lower())
+            download_to_path(track.file_url, local)
+            bpm, key = analyze_bpm_and_key(local)
+            track.stage = "separating"
             db.commit()
-
-    except Exception as exc:  # noqa: BLE001
+            paths = separate_stems(local, tmp)
+            track.stage = "storing"
+            db.commit()
+            urls = {name: upload_file(path, f"stems/{track_id}/{name}.wav", "audio/wav")
+                    for name, path in paths.items()}
+            db.query(Stem).filter(Stem.track_id == track.id).delete()
+            for name, url in urls.items():
+                db.add(Stem(track_id=track.id, stem_type=StemType(name), stem_url=url))
+            track.bpm, track.musical_key = bpm, key
+            track.status, track.stage, track.error_message = TrackStatus.completed, "ready", None
+            db.commit()
+    except Exception as exc:
         db.rollback()
-        track = db.query(Track).filter(Track.id == uuid.UUID(track_id)).first()
-        if track is not None:
-            track.status = TrackStatus.failed
-            track.error_message = str(exc)[:500]
-            db.add(track)
+        track = db.get(Track, uuid.UUID(track_id))
+        transient = isinstance(exc, (EndpointConnectionError, ConnectionClosedError, ReadTimeoutError))
+        retrying = transient and self.request.retries < self.max_retries
+        if track:
+            track.status = TrackStatus.pending if retrying else TrackStatus.failed
+            track.stage = "retrying" if retrying else "failed"
+            track.error_message = "Processing failed. Retry the track; check worker logs if it persists."
             db.commit()
+        if retrying:
+            raise self.retry(exc=exc, countdown=10 * (self.request.retries + 1))
         raise
     finally:
         db.close()
