@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     demucs_model: str = "htdemucs_ft"
 
     cors_origins: list[str] = ["http://localhost:3000"]
+    max_upload_mb: int = 50
+    max_duration_seconds: int = 300
+    max_project_tracks: int = 4
+    auth_secret: str = "local-development-only-change-before-hosting"
+    auth_token_hours: int = 168
 
 
 settings = Settings()

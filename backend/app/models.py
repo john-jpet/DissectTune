@@ -32,6 +32,7 @@ class User(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     tracks: Mapped[list["Track"]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -51,6 +52,8 @@ class Track(Base):
         Enum(TrackStatus, name="track_status"), default=TrackStatus.pending, nullable=False
     )
     error_message: Mapped[str | None] = mapped_column(String, nullable=True)
+    stage: Mapped[str] = mapped_column(String, default="queued", server_default="queued")
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="tracks")
