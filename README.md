@@ -1,99 +1,159 @@
-# DissectTune
+# DissectTune Studio
 
-AI-powered multi-track mashup & stem-mixing platform. Upload audio, split it into
-Vocals/Drums/Bass/Other stems, detect BPM and musical key, and mix multiple tracks
-together in a browser-based DAW-style deck.
+Separate songs into vocals, drums, bass and other; combine their stems in a browser
+studio; save the arrangement; export a stereo WAV.
 
-## Architecture
+## Start locally
 
-```
-Next.js frontend  ──HTTP──>  FastAPI backend  ──Celery task──>  Redis broker
-                                   │                                  │
-                                   ├─► PostgreSQL (metadata)          ▼
-                                   └─► S3 / R2 (audio blobs)   Celery worker
-                                                                 ├─ HTDemucs (stems)
-                                                                 └─ Librosa (BPM/key)
+Start Docker Desktop's Linux engine, then:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up -d --build
 ```
 
-See the full technical spec for schema and API details.
+Open http://localhost:3000 and create an account. API documentation is at
+http://localhost:8000/docs by default. MinIO's local console is at
+http://localhost:9001 (`minioadmin` / `minioadmin`).
+All published service ports bind to localhost.
 
-## Repo layout
+If Windows reserves port 8000, set `API_PORT=8001` in `.env` and rebuild.
+The frontend image receives the corresponding API URL at build time.
+This checkout's ignored local environment uses **8001**.
 
-- `backend/` — FastAPI app, SQLAlchemy models, Alembic migrations, Celery worker/tasks
-- `frontend/` — Next.js (TypeScript) app: upload flow + Wavesurfer-based mixing deck
-- `docker-compose.yml` — Postgres, Redis, MinIO (local S3), API, worker, frontend
+The API applies migrations and initializes a private storage bucket before the worker
+starts. PostgreSQL, Redis, uploaded audio and model weights use persistent Docker volumes.
+The first build and first inference download dependencies/model weights. CPU inference
+can take several minutes. The worker processes one job at a time to bound memory.
 
-## Running locally (Docker Compose)
+The example environment enables real `htdemucs_ft` separation on CPU. For a lightweight
+development demo, set both flags and rebuild:
 
-```bash
-cp .env.example .env
-docker compose up --build
+```dotenv
+USE_REAL_DEMUCS=false
+INSTALL_DEMUCS=false
 ```
 
-- Frontend: http://localhost:3000
-- API: http://localhost:8000 (docs at `/docs`)
-- MinIO console: http://localhost:9001 (minioadmin / minioadmin)
+Demo mode creates four valid WAV copies of the original; the UI labels this explicitly.
+It exercises the workflow but does not isolate instruments.
 
-The first `api` container run applies Alembic migrations automatically.
+## Make a mix
 
-## Stem separation: stub vs. real HTDemucs
+1. Create a session.
+2. Drag in MP3, WAV or FLAC files, or select multiple files with Browse.
+3. Watch queued, analyzing, separating and storing stages in the library.
+4. Add completed tracks to the session.
+5. Press Play or Space. Adjust mute, solo, per-stem volume and master volume.
+6. Set each track's **Start** offset in seconds to align it. Offset changes pause playback.
+   Click the waveform or use the transport slider to seek.
+7. Changes autosave after a short pause. Save retries explicitly if saving failed.
+8. Export WAV downloads 44.1 kHz, stereo, 16-bit PCM audio.
 
-By default (`USE_REAL_DEMUCS=false`), the worker's separation step is **stubbed**:
-it copies the source audio into 4 placeholder stem files so the full pipeline
-(upload → queue → storage → DB → mixing UI) works end-to-end without a GPU or the
-~1-2GB HTDemucs model download.
+Sessions reopen from the sidebar after refresh. Your account token stays in the current
+tab's sessionStorage; closing the tab requires signing in again. Removing a track from
+a session leaves its original and stems in the library.
 
-To run real separation:
+Mute wins over solo. When any stem is soloed, every non-soloed stem is silent across
+the project. Playback and export share scheduling and gain rules. Lower levels if
+summing sources distorts: the WAV encoder clamps samples to PCM range, without normalization.
 
-1. Build the worker image with Demucs/Torch installed:
-   `docker compose build --build-arg INSTALL_DEMUCS=true worker`
-2. Set `USE_REAL_DEMUCS=true` in `.env` (and ideally run the worker on a
-   GPU-equipped host — see the tech spec's infra section for RunPod/Lambda Labs
-   GPU node guidance).
+## Limits and deferred features
 
-## Running without Docker
+- 50 MB / 300 seconds per source and four tracks per project by default.
+- A 512 MB estimated decoded-audio budget protects browser memory. Long mixes may
+  require shorter tracks or fewer songs. Desktop browsers are the primary editor target.
+- BPM/key are estimates. Alignment is manual; automatic beat matching, pitch shifting,
+  tempo stretching, effects and MP3 export are deferred.
+- The upload queue runs sequentially; separation continues independently on the worker.
+- Transient storage connection failures retry twice. Failed tracks can be retried.
+  Jobs stalled for 75 minutes expose Retry, beyond the worker's hard execution limit.
+- Library/project lists currently return the latest 100 entries.
+- Collaboration, password reset, email verification and permanent library deletion are deferred.
+- Migrations retain old demo-account data, but do not assign it to newly registered users.
 
-Backend:
+## Implementation and evidence
 
-```bash
+| Capability | Code |
+|---|---|
+| Password hashing and signed expiring bearer tokens | `backend/app/services/auth.py`, `routers/auth.py` |
+| Validated uploads, ownership, authenticated WAV streaming and retry | `backend/app/routers/tracks.py` |
+| Celery stages, atomic job claiming and stem replacement | `backend/app/tasks.py` |
+| Real Demucs invocation and valid WAV demo output | `backend/app/services/separation.py` |
+| BPM/key estimates | `backend/app/services/analysis.py` |
+| Validated compositions and persistence | `backend/app/schemas.py`, `routers/projects.py` |
+| Studio, library, upload queue and autosave | `frontend/src/components/Studio.tsx` |
+| Shared playback clock and offline WAV rendering | `frontend/src/lib/audio.ts` |
+| Canvas waveforms from decoded audio | `frontend/src/components/WaveLane.tsx` |
+
+The worker downloads private objects through authenticated S3 calls:
+
+```python
+get_s3_client().download_file(settings.s3_bucket_name, object_key(key), dest_path)
+```
+
+The browser fetches owned stems through authenticated API endpoints, never public
+bucket URLs. The shared engine schedules every source against one audio clock:
+
+```typescript
+source.start(when + Math.max(0, voice.offset - position), skip);
+```
+
+Export uses that same scheduler inside `OfflineAudioContext`. Composition JSON stores
+`master_volume`, ordered `tracks`, `offset_seconds`, and each stem's
+`active`, `solo`, `volume`. The API validates ownership, readiness and stem membership.
+
+## Verification
+
+Backend tests use SQLite and mocked storage/queue boundaries:
+
+```powershell
 cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt   # or strip demucs/torch/pyrubberband for a light install
-cp ../.env.example .env
-alembic upgrade head
-uvicorn app.main:app --reload
-# in a second shell:
-celery -A app.celery_app worker --loglevel=info
+python -m pytest tests -q
 ```
 
-Requires local Postgres, Redis, and an S3-compatible store (e.g. MinIO) reachable
-at the URLs configured in `backend/app/config.py` / `.env`.
+Install the backend runtime dependencies and pytest/httpx first. The current
+`requirements-dev.txt` also includes optional inference dependencies through
+`requirements.txt`; the Docker API build skips those heavy dependencies.
 
 Frontend:
 
-```bash
+```powershell
 cd frontend
-npm install
-cp .env.local.example .env.local
-npm run dev
+npm ci
+npm run typecheck
+npm run lint
+npx playwright install chromium
+npm test
 ```
 
-## API endpoints
+Browser tests cover two-track editing, autosave/restoration, valid WAV download,
+responsive layouts, and rendered audio samples for offsets, mute, solo and master gain.
+Screenshots go to ignored `frontend/test-results/`.
 
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/tracks/upload` | Upload an audio file, kicks off async processing |
-| GET | `/api/tracks/{track_id}/status` | Poll processing status, BPM/key, stem URLs |
-| POST | `/api/projects` | Create a mix project from a set of tracks |
-| GET | `/api/projects/{project_id}` | Fetch a mix project |
-| PUT | `/api/projects/{project_id}` | Update mix parameters (volume/pitch/offsets) |
+With the Docker stack running, verify real storage, queue and inference:
 
-## Notes / follow-ups
+```powershell
+cd backend
+python tests/smoke_live.py
+```
 
-- Auth is a minimal placeholder (`X-User-Email` header auto-provisions a user
-  row) — swap in real auth before any multi-user deployment.
-- Real-time pitch/tempo correction (PyRubberBand) is wired as a dependency but
-  not yet exposed via an API endpoint — the mix project's `composition_data`
-  JSON already has fields (`pitch_shift`, `offset_seconds`) to build it on.
-- WebSocket-based status push (instead of polling) is a natural next step once
-  the polling flow is validated end-to-end.
+This creates an isolated test account and two synthetic six-second tracks, checks eight
+private WAVs and project save/load, and writes an ignored report to
+`artifacts/live-smoke.json`. Real mode additionally requires distinct stem outputs.
+Test data remains in the local library/database.
+
+Native development uses Turbopack because Webpack rejects paths containing `!`, such
+as this checkout's parent directory. Production builds run in Docker at `/app`;
+a native production build requires a checkout path without `!`.
+
+## Hosting considerations
+
+Compose is configured for local operation. Before public hosting, set
+`APP_ENV=production` and a random `AUTH_SECRET` of at least 32 characters; the API
+rejects the development secret in production. Use HTTPS, private DB/Redis/S3 networking,
+non-default infrastructure credentials, appropriate CORS origins and reverse-proxy
+request/rate limits. Set the public API URL when building the frontend.
+
+Tokens expire after seven days by default; changing AUTH_SECRET invalidates existing
+sessions. GPU workers require a compatible `TORCH_INDEX_URL` build argument and explicit
+host GPU access configuration. The default worker uses CPU inference.

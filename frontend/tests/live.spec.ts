@@ -1,0 +1,32 @@
+import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
+
+test("live production studio opens real separated stems and exports the mix", async ({ page }) => {
+  test.skip(process.env.LIVE_MVP !== "1", "Run backend/tests/smoke_live.py first, then set LIVE_MVP=1.");
+  const fixture = JSON.parse(readFileSync("../artifacts/live-smoke.json", "utf8"));
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Already have an account? Sign in" }).click();
+  await page.getByLabel("Email address").fill(fixture.email);
+  await page.getByLabel("Password", { exact: true }).fill("Mvp-smoke-test-123");
+  await page.getByRole("button", { name: "Sign in →", exact: true }).click();
+  await page.getByRole("button", { name: "MVP live session" }).click();
+  await expect(page.locator(".stem-lane")).toHaveCount(8);
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled({ timeout: 30000 });
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect.poll(async () => Number(await page.getByLabel("Playhead position").inputValue())).toBeGreaterThan(.1);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export WAV" }).click();
+  const download = await downloadPromise;
+  const file = readFileSync((await download.path())!);
+  expect(file.toString("ascii", 0, 4)).toBe("RIFF");
+  expect(file.readUInt32LE(40)).toBe(6.5 * 44100 * 4);
+  expect(file.subarray(44).some(byte => byte !== 0)).toBeTruthy();
+  await page.screenshot({ path: "test-results/live-studio.png", fullPage: true });
+  await page.reload();
+  await page.getByRole("button", { name: "MVP live session" }).click();
+  await expect(page.getByLabel("Start offset for Afterglow rhythm.wav")).toHaveValue("0.5");
+  expect(errors).toEqual([]);
+});
