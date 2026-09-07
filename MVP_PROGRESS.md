@@ -9,12 +9,12 @@
 - [x] Shared Web Audio playback, seek, mute, solo, volume and offsets
 - [x] Autosave, explicit save and project restoration
 - [x] Matching offline stereo WAV export
-- [x] Backend regression tests: seven passing
-- [x] Browser regression tests: three passing
+- [x] Backend regression tests: eight passing
+- [x] Browser tests: four passing, including the live production stack
 - [x] Desktop screenshot inspection and responsive overflow checks
-- [ ] Production Docker frontend build
-- [ ] Real two-track separation and private-storage verification
-- [ ] Final acceptance report
+- [x] Production Docker frontend build
+- [x] Real two-track separation and private-storage verification
+- [x] Final acceptance report: MVP_ACCEPTANCE.md
 
 Each coherent stage is committed separately. Related plan items were combined where
 they shared implementation boundaries. Manual alignment is the MVP scope;

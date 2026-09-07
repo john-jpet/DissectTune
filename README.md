@@ -1,5 +1,7 @@
 # DissectTune Studio
 
+Local verification results and limitations: [MVP_ACCEPTANCE.md](MVP_ACCEPTANCE.md).
+
 Separate songs into vocals, drums, bass and other; combine their stems in a browser
 studio; save the arrangement; export a stereo WAV.
 
