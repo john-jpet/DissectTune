@@ -8,6 +8,13 @@ const colors: Record<StemType, string> = { vocals: "#c5a5ff", drums: "#f9bc79", 
 const clock = (n: number) => Math.floor(n / 60).toString().padStart(2, "0") + ":" + Math.floor(n % 60).toString().padStart(2, "0");
 const message = (e: unknown) => e instanceof Error ? e.message : "Something went wrong. Please try again.";
 const snapshot = (p: Project) => JSON.stringify({ title: p.title, master_bpm: p.master_bpm, composition_data: p.composition_data });
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const keyRoots: Record<string, number> = { C: 0, "C#": 1, Db: 1, D: 2, "D#": 3, Eb: 3, E: 4, F: 5, "F#": 6, Gb: 6, G: 7, "G#": 8, Ab: 8, A: 9, "A#": 10, Bb: 10, B: 11 };
+const keyRoot = (key: string | null) => key ? keyRoots[key.trim().replace(/m$/, "")] : undefined;
+const nearestPitch = (difference: number) => {
+  const wrapped = ((difference + 6) % 12 + 12) % 12 - 6;
+  return wrapped === -6 ? 6 : wrapped;
+};
 
 export default function Studio() {
   const [email, setEmail] = useState<string | null>(null);
@@ -193,6 +200,27 @@ export default function Studio() {
     edit(p => ({ ...p, composition_data: { ...p.composition_data, tracks: p.composition_data.tracks.map(t =>
       t.track_id === id ? { ...t, stems: { ...t.stems, [type]: { ...t.stems[type], ...values } } } : t) } }));
   }
+  function matchTracks(kind: "tempo" | "pitch" | "both") {
+    if (!project || selected.length < 2) return;
+    const referenceId = (document.getElementById("match-reference") as HTMLSelectElement | null)?.value;
+    const targetId = (document.getElementById("match-target") as HTMLSelectElement | null)?.value;
+    const reference = tracks.find(t => t.track_id === referenceId);
+    const target = tracks.find(t => t.track_id === targetId);
+    if (!reference || !target || reference.track_id === target.track_id) return;
+    const tempo = reference.bpm && target.bpm ? clamp(reference.bpm / target.bpm, 0.5, 2) : undefined;
+    const referenceRoot = keyRoot(reference.key);
+    const targetRoot = keyRoot(target.key);
+    const pitch = referenceRoot !== undefined && targetRoot !== undefined ? nearestPitch(referenceRoot - targetRoot) : undefined;
+    if ((kind === "tempo" || kind === "both") && tempo === undefined) { setError("Both tracks need BPM estimates to match tempo."); return; }
+    if ((kind === "pitch" || kind === "both") && pitch === undefined) { setError("Both tracks need musical key estimates to match pitch."); return; }
+    stop();
+    edit(p => ({ ...p, composition_data: { ...p.composition_data, tracks: p.composition_data.tracks.map(item => item.track_id === target.track_id ? {
+      ...item,
+      ...(kind === "tempo" || kind === "both" ? { tempo_ratio: tempo } : {}),
+      ...(kind === "pitch" || kind === "both" ? { pitch_semitones: pitch } : {}),
+    } : item) } }));
+    setError("");
+  }
   async function seek(next: number) {
     setPosition(next);
     if (playing && mixer.current && project) await mixer.current.play(project.composition_data, tracks, next);
@@ -274,6 +302,14 @@ export default function Studio() {
         </section> : <div className="arrangement">
           <div className="arrangement-bar"><span>ARRANGEMENT</span><span>{audioState || "44.1 kHz · stereo"}</span>
             {audioState === "Audio unavailable" && <button onClick={() => setLoadRevision(n => n + 1)}>Retry audio</button>}</div>
+          {selected.length >= 2 && <div className="match-bar">
+            <strong>MATCH TRACKS</strong>
+            <label>Reference<select id="match-reference" aria-label="Match reference track" defaultValue={selected[0].track_id}>{selected.map(item => <option key={item.track_id} value={item.track_id}>{tracks.find(t => t.track_id === item.track_id)?.original_filename || item.track_id}</option>)}</select></label>
+            <label>Target<select id="match-target" aria-label="Match target track" defaultValue={selected[1].track_id}>{selected.map(item => <option key={item.track_id} value={item.track_id}>{tracks.find(t => t.track_id === item.track_id)?.original_filename || item.track_id}</option>)}</select></label>
+            <button onClick={() => matchTracks("tempo")}>Tempo</button>
+            <button onClick={() => matchTracks("pitch")}>Pitch</button>
+            <button className="primary" onClick={() => matchTracks("both")}>Both</button>
+          </div>}
           <div className="timeline-ruler"><span>STEMS</span><div>{Array.from({ length: 6 }, (_, i) => <span key={i}>{clock(duration * i / 5)}</span>)}</div><span>LEVEL</span></div>
           {selected.map((item, index) => {
             const track = tracks.find(t => t.track_id === item.track_id);

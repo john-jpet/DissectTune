@@ -10,6 +10,7 @@
 - [x] Autosave, explicit save and project restoration
 - [x] Matching offline stereo WAV export
 - [x] Per-track tempo (0.5x–2x), pitch (-12–+12 semitones), and lazy stem loading
+- [x] Reference/target tempo and pitch matching for multi-track sessions
 - [x] Backend regression tests: eight passing
 - [x] Browser tests: four passing, including the live production stack
 - [x] Desktop screenshot inspection and responsive overflow checks

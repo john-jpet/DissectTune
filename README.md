@@ -70,6 +70,10 @@ summing sources distorts: the WAV encoder clamps samples to PCM range, without n
   matching, effects and MP3 export are deferred.
 - Collapsing a track unloads its stems from the browser mixer; expanding it loads them
   again on demand. This keeps inactive tracks from consuming decoded-audio memory.
+- With two or more tracks loaded, MATCH TRACKS can apply the reference track's estimated
+  BPM, musical key, or both to a target track. Tempo matching sets the target playback
+  ratio; pitch matching uses the nearest semitone interval and stays within the editor's
+  supported range.
 - The upload queue runs sequentially; separation continues independently on the worker.
 - Transient storage connection failures retry twice. Failed tracks can be retried.
   Jobs stalled for 75 minutes expose Retry, beyond the worker's hard execution limit.
