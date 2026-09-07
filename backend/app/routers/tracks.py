@@ -3,6 +3,8 @@ import os
 import subprocess
 import tempfile
 import uuid
+from datetime import datetime, timedelta, timezone
+from sqlalchemy import or_, and_
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
@@ -22,6 +24,8 @@ def serialize(track):
     return TrackStatusResponse(
         track_id=track.id, status=track.status, stage=track.stage,
         duration=track.duration, bpm=track.bpm, key=track.musical_key,
+        retryable=track.status == TrackStatus.failed or (track.status != TrackStatus.completed and
+            track.updated_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc) - timedelta(minutes=75)),
         original_filename=track.original_filename, error_message=track.error_message,
         stems=[{"id": s.id, "stem_type": s.stem_type,
                 "stem_url": f"/api/tracks/{track.id}/stems/{s.id}/audio"} for s in track.stems])
@@ -103,10 +107,12 @@ def get_track_status(track_id: uuid.UUID, db: Session = Depends(get_db),
 def retry(track_id: uuid.UUID, db: Session = Depends(get_db),
           user: User = Depends(get_current_user)):
     track = owned_track(db, track_id, user)
-    updated = db.query(Track).filter(Track.id == track.id, Track.status == TrackStatus.failed).update({
-        Track.status: TrackStatus.pending, Track.stage: "queued", Track.error_message: None})
+    updated = db.query(Track).filter(Track.id == track.id, or_(Track.status == TrackStatus.failed,
+        and_(Track.status.in_([TrackStatus.pending, TrackStatus.processing]),
+             Track.updated_at < datetime.now(timezone.utc) - timedelta(minutes=75)))).update({
+        Track.status: TrackStatus.pending, Track.stage: "queued", Track.error_message: None}, synchronize_session=False)
     if not updated:
-        raise HTTPException(409, "Only failed tracks can be retried")
+        raise HTTPException(409, "Only failed tracks or jobs stalled for 75 minutes can be retried")
     db.commit()
     db.refresh(track)
     dispatch(db, track)

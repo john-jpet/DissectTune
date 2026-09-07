@@ -3,7 +3,7 @@ export type TrackStatus = "pending" | "processing" | "completed" | "failed";
 export type StemType = "vocals" | "drums" | "bass" | "other";
 export interface Stem { id: string; stem_type: StemType; stem_url: string }
 export interface TrackStatusResponse {
-  track_id: string; status: TrackStatus; stage: string; duration: number | null;
+  track_id: string; status: TrackStatus; stage: string; retryable?: boolean; duration: number | null;
   bpm: number | null; key: string | null; original_filename: string;
   error_message: string | null; stems: Stem[];
 }

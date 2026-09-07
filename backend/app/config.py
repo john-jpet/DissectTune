@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import model_validator
 
 
 class Settings(BaseSettings):
@@ -22,12 +23,19 @@ class Settings(BaseSettings):
     use_real_demucs: bool = False
     demucs_model: str = "htdemucs_ft"
 
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
     max_upload_mb: int = 50
     max_duration_seconds: int = 300
     max_project_tracks: int = 4
     auth_secret: str = "local-development-only-change-before-hosting"
     auth_token_hours: int = 168
+    app_env: str = "development"
+
+    @model_validator(mode="after")
+    def production_secret(self):
+        if self.app_env == "production" and (len(self.auth_secret) < 32 or self.auth_secret.startswith("local-development")):
+            raise ValueError("Production requires a random AUTH_SECRET of at least 32 characters")
+        return self
 
 
 settings = Settings()

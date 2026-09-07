@@ -126,6 +126,20 @@ def test_storage_keys_and_composition_limits():
         Composition.model_validate({"tracks": [], "master_volume": float("nan")})
 
 
+def test_stale_processing_can_be_retried(setup):
+    from datetime import datetime, timedelta, timezone
+    client, factory = setup
+    headers = account(client, "stale")
+    track_id = seed(factory, "stale@example.com", TrackStatus.processing)
+    with factory() as db:
+        track = db.get(Track, uuid.UUID(track_id))
+        track.updated_at = datetime.now(timezone.utc) - timedelta(minutes=80)
+        db.commit()
+    assert client.get(f"/api/tracks/{track_id}/status", headers=headers).json()["retryable"]
+    with patch("app.routers.tracks.process_track.delay"):
+        assert client.post(f"/api/tracks/{track_id}/retry", headers=headers).status_code == 200
+
+
 def test_worker_claim_and_stem_replacement(setup, tmp_path):
     _, factory = setup
     client = setup[0]

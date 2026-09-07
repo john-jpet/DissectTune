@@ -53,6 +53,7 @@ class Track(Base):
     )
     error_message: Mapped[str | None] = mapped_column(String, nullable=True)
     stage: Mapped[str] = mapped_column(String, default="queued", server_default="queued")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     duration: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

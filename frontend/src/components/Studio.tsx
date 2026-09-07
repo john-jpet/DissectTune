@@ -211,7 +211,7 @@ export default function Studio() {
     <div className="welcome-art"><div className="brand"><span className="brand-icon">∿</span> DissectTune <small>STUDIO</small></div>
       <div className="welcome-copy"><p className="eyebrow">A NEW WAY TO HEAR IT</p><h1>Take it apart.<br /><em>Make it yours.</em></h1>
       <p>Find the vocals. Feel the rhythm. Bring your favourite sounds together in a mix only you could make.</p>
-      <div className="art-lanes" aria-hidden="true">{Object.entries(colors).map(([name, color], row) => <div key={name} style={{ color }}><span>{name}</span><div>{Array.from({ length: 50 }, (_, i) => <i key={i} style={{ height: (12 + Math.abs(Math.sin(i * 1.7 + row * 3) * Math.cos(i * .23)) * 55) + "px" }} />)}</div></div>)}</div>
+      <div className="art-lanes" aria-hidden="true">{Object.entries(colors).map(([name, color], row) => <div key={name} style={{ color }}><span>{name}</span><div>{Array.from({ length: 50 }, (_, i) => <i key={i} style={{ height: Math.round(12 + Math.abs(Math.sin(i * 1.7 + row * 3) * Math.cos(i * .23)) * 55) + "px" }} />)}</div></div>)}</div>
       <p className="welcome-foot">FOUR STEMS. ENDLESS POSSIBILITIES.</p></div>
     </div><section className="auth-panel"><p className="eyebrow">YOUR NEXT MIX STARTS HERE</p><h2>{authMode === "register" ? "Create your studio." : "Welcome back."}</h2>
       <p className="muted">A little separation. A lot of possibility.</p>
@@ -250,7 +250,7 @@ export default function Studio() {
           <small>{t.status === "completed" ? (t.bpm || "—") + " BPM · " + (t.key || "—") + " · " + clock(t.duration || 0) : t.stage}</small></div></div>
           {t.status === "completed" ? <button className="add-track" disabled={!project || selected.some(s => s.track_id === t.track_id) || selected.length >= (config?.max_project_tracks || 4)}
             onClick={() => addTrack(t)}>{selected.some(s => s.track_id === t.track_id) ? "Added ✓" : "+ Add to mix"}</button> :
-          t.status === "failed" ? <><p className="error-inline small">{t.error_message}</p><button onClick={() => {
+          t.status === "failed" || t.retryable ? <><p className="error-inline small">{t.error_message || "Processing stalled. You can retry this track."}</p><button onClick={() => {
             void api("/api/tracks/" + t.track_id + "/retry", { method: "POST" }).catch(e => setError(message(e)));
           }}>Retry processing</button></> : <div className="processing-bar"><i /></div>}
         </article>)}</div>

@@ -19,6 +19,7 @@ class TrackStatusResponse(BaseModel):
     track_id: uuid.UUID
     status: TrackStatus
     stage: str
+    retryable: bool = False
     duration: float | None = None
     bpm: float | None = None
     key: str | None = None
