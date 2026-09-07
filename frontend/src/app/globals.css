@@ -106,6 +106,7 @@ input.project-title:hover { border-bottom-color:#555!important; }
 .track-meta b { margin:0 5px; color:#555; }
 .offset-control { display:flex; align-items:center; gap:5px; font-size:9px; color:var(--muted); margin-left:auto; }
 .offset-control input { width:62px; padding:5px!important; font-size:10px; }
+.lazy-note { grid-column: 1 / -1; padding:18px; color:#777480; font-size:10px; text-align:center; border-bottom:1px solid #23242a; }
 .stem-lane { display:grid; grid-template-columns:185px minmax(0,1fr) 115px; align-items:center; height:70px; padding:0 14px; border-bottom:1px solid #23242a; }
 .stem-label { display:flex; gap:6px; align-items:center; padding-right:14px; }
 .stem-label>i { width:3px; height:22px; border-radius:3px; margin-right:4px; }

@@ -64,8 +64,12 @@ summing sources distorts: the WAV encoder clamps samples to PCM range, without n
 - 50 MB / 300 seconds per source and four tracks per project by default.
 - A temporary 1 GB estimated decoded-audio budget protects browser memory. Long mixes may
   require shorter tracks or fewer songs. Desktop browsers are the primary editor target.
-- BPM/key are estimates. Alignment is manual; automatic beat matching, pitch shifting,
-  tempo stretching, effects and MP3 export are deferred.
+- BPM/key are estimates and alignment is manual. Each track can be adjusted independently
+  from 0.5x–2x tempo and -12–+12 semitones pitch; these controls use browser Web Audio
+  playback-rate and detune processing and are included in WAV export. Automatic beat
+  matching, effects and MP3 export are deferred.
+- Collapsing a track unloads its stems from the browser mixer; expanding it loads them
+  again on demand. This keeps inactive tracks from consuming decoded-audio memory.
 - The upload queue runs sequentially; separation continues independently on the worker.
 - Transient storage connection failures retry twice. Failed tracks can be retried.
   Jobs stalled for 75 minutes expose Retry, beyond the worker's hard execution limit.

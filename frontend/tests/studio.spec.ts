@@ -49,6 +49,8 @@ test("mix two tracks, save, restore, seek, and export a valid WAV", async ({ pag
   await page.getByLabel("Solo vocals Midnight.wav").click();
   await expect(page.getByLabel("Solo vocals Midnight.wav")).toHaveAttribute("aria-pressed", "true");
   await page.getByLabel("Start offset for Afterglow.wav").fill("0.5");
+  await page.getByLabel("Tempo ratio for Afterglow.wav").fill("1.1");
+  await page.getByLabel("Pitch semitones for Afterglow.wav").fill("2");
   await page.getByLabel("Session title").fill("Midnight rework");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(() => project.title).toBe("Midnight rework");
@@ -69,6 +71,8 @@ test("mix two tracks, save, restore, seek, and export a valid WAV", async ({ pag
   await page.getByRole("button", { name: "Midnight rework" }).click();
   await expect(page.locator(".stem-lane")).toHaveCount(8);
   await expect(page.getByLabel("Start offset for Afterglow.wav")).toHaveValue("0.5");
+  await expect(page.getByLabel("Tempo ratio for Afterglow.wav")).toHaveValue("1.1");
+  await expect(page.getByLabel("Pitch semitones for Afterglow.wav")).toHaveValue("2");
   await expect(page.getByLabel("Solo vocals Midnight.wav")).toHaveAttribute("aria-pressed", "true");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: "test-results/studio-mobile.png", fullPage: true });
@@ -98,7 +102,7 @@ test("real Web Audio rendering respects offsets, solo, mute, master gain, and WA
     buffer.getChannelData(0).fill(.5);
     const buffers = new Map([["v", buffer], ["d", buffer]]);
     const tracks = [{ track_id: "t", stems: [{ id: "v", stem_type: "vocals" }, { id: "d", stem_type: "drums" }] }];
-    const composition = { master_volume: .5, tracks: [{ track_id: "t", offset_seconds: .25, stems: {
+    const composition = { master_volume: .5, tracks: [{ track_id: "t", offset_seconds: .25, tempo_ratio: 1.25, pitch_semitones: 3, stems: {
       vocals: { active: true, solo: true, volume: .5 }, drums: { active: true, solo: false, volume: 1 },
     } }] };
     const voices = exports.audibleVoices(composition, tracks, buffers);
@@ -111,13 +115,14 @@ test("real Web Audio rendering respects offsets, solo, mute, master gain, and WA
     const blob = exports.encodeWav(output);
     const data = new DataView(await blob.arrayBuffer());
     return { before: samples[100], during: samples[12000], after: samples[23000],
-      gains: voices.map((v: any) => v.volume), muted: muted.map((v: any) => v.volume),
+      gains: voices.map((v: any) => v.volume), rates: voices.map((v: any) => [v.tempoRatio, v.pitchSemitones]), muted: muted.map((v: any) => v.volume),
       pcm: data.getInt16(44 + 12000 * 4, true), frames: data.getUint32(40, true) / 4 };
   }, js);
   expect(result.before).toBe(0);
   expect(result.during).toBeCloseTo(.125, 5);
   expect(result.after).toBe(0);
-  expect(result.gains).toEqual([.5, 0]);
+    expect(result.gains).toEqual([.5, 0]);
+    expect(result.rates).toEqual([[1.25, 3], [1.25, 3]]);
   expect(result.muted).toEqual([0, 0]);
   expect(result.pcm).toBe(4095);
   expect(result.frames).toBe(44100);

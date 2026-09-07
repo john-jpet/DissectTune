@@ -9,6 +9,7 @@
 - [x] Shared Web Audio playback, seek, mute, solo, volume and offsets
 - [x] Autosave, explicit save and project restoration
 - [x] Matching offline stereo WAV export
+- [x] Per-track tempo (0.5x–2x), pitch (-12–+12 semitones), and lazy stem loading
 - [x] Backend regression tests: eight passing
 - [x] Browser tests: four passing, including the live production stack
 - [x] Desktop screenshot inspection and responsive overflow checks
@@ -18,5 +19,5 @@
 
 Each coherent stage is committed separately. Related plan items were combined where
 they shared implementation boundaries. Manual alignment is the MVP scope;
-pitch/tempo correction remains deferred. Test outputs and local environment files
+automatic beat matching remains deferred. Test outputs and local environment files
 are ignored, and test-created audio/accounts are retained for inspection.

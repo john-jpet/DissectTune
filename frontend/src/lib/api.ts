@@ -10,7 +10,7 @@ export interface TrackStatusResponse {
 export interface TrackUploadResponse { track_id: string; status: TrackStatus }
 export interface StemSettings { active: boolean; solo: boolean; volume: number }
 export interface CompositionTrack {
-  track_id: string; offset_seconds: number; stems: Record<StemType, StemSettings>;
+  track_id: string; offset_seconds: number; tempo_ratio: number; pitch_semitones: number; stems: Record<StemType, StemSettings>;
 }
 export interface Composition { tracks: CompositionTrack[]; master_volume: number }
 export interface Project {

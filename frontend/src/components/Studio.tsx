@@ -36,7 +36,8 @@ export default function Studio() {
   const selected = project?.composition_data.tracks || [];
   const selectedIds = selected.map(t => t.track_id).join(",");
   const activeTracks = selected.flatMap(t => tracks.find(item => item.track_id === t.track_id) || []);
-  const duration = Math.max(0, ...selected.map(t => t.offset_seconds + (tracks.find(item => item.track_id === t.track_id)?.duration || 0)));
+  const loadableIds = selected.filter(item => !collapsed[item.track_id]).map(item => item.track_id);
+  const duration = Math.max(0, ...selected.map(t => t.offset_seconds + (tracks.find(item => item.track_id === t.track_id)?.duration || 0) / (t.tempo_ratio || 1)));
   const stop = useCallback(() => { mixer.current?.stop(); setPlaying(false); }, []);
   const edit = (change: (p: Project) => Project) => {
     if (!projectRef.current) return;
@@ -67,6 +68,7 @@ export default function Studio() {
       const normalized: Project = { ...next, composition_data: {
         master_volume: next.composition_data.master_volume ?? 0.8,
         tracks: next.composition_data.tracks.map(t => ({ track_id: t.track_id, offset_seconds: t.offset_seconds,
+          tempo_ratio: t.tempo_ratio ?? 1, pitch_semitones: t.pitch_semitones ?? 0,
           stems: Object.fromEntries(Object.entries(t.stems).map(([key, value]) => [key,
             { active: value.active, solo: value.solo ?? false, volume: value.volume }])) as Record<StemType, StemSettings> })),
       }};
@@ -106,20 +108,20 @@ export default function Studio() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, []);
-  const stemSignature = activeTracks.flatMap(t => t.stems.map(s => s.id)).join(",");
+  const stemSignature = activeTracks.filter(t => loadableIds.includes(t.track_id)).flatMap(t => t.stems.map(s => s.id)).join(",");
   useEffect(() => {
     if (!selectedIds || !stemSignature) { mixer.current?.buffers.clear(); setAudioReady(false); return; }
     const controller = new AbortController();
     if (!mixer.current) mixer.current = new Mixer();
     stop(); setAudioReady(false); setAudioState("Loading audio…");
-    const available = tracks.filter(t => selectedIds.split(",").includes(t.track_id));
+    const available = tracks.filter(t => loadableIds.includes(t.track_id));
     void mixer.current.load(available, controller.signal, (done, total) => setAudioState("Loading stems " + done + " / " + total))
       .then(() => { if (!controller.signal.aborted) { setAudioReady(true); setAudioState(""); } })
       .catch(e => { if (!controller.signal.aborted) { setAudioState("Audio unavailable"); setError(message(e)); } });
     return () => controller.abort();
     // Only reload when project membership or stem IDs change, not on polling updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, stemSignature, loadRevision, stop]);
+  }, [selectedIds, stemSignature, loadRevision, stop, loadableIds.join(",")]);
   useEffect(() => { if (project) mixer.current?.update(project.composition_data, tracks); }, [project, tracks]);
   useEffect(() => () => mixer.current?.dispose(), []);
   const play = useCallback(async () => {
@@ -183,7 +185,7 @@ export default function Studio() {
     if (!project || selected.length >= (config?.max_project_tracks || 4)) return;
     stop();
     edit(p => ({ ...p, composition_data: { ...p.composition_data, tracks: [...p.composition_data.tracks, {
-      track_id: track.track_id, offset_seconds: 0,
+      track_id: track.track_id, offset_seconds: 0, tempo_ratio: 1, pitch_semitones: 0,
       stems: Object.fromEntries(track.stems.map(s => [s.stem_type, { active: true, solo: false, volume: 0.7 }])) as Record<StemType, StemSettings>,
     }] } }));
   }
@@ -281,6 +283,10 @@ export default function Studio() {
                 <span className="track-number">{String(index + 1).padStart(2, "0")}</span><strong>{track.original_filename}</strong><span className="track-meta">{track.bpm ?? "—"} BPM <b>·</b> {track.key ?? "—"}</span>
                 <label className="offset-control">Start <input type="number" min={0} max={300} step={0.1} aria-label={"Start offset for " + track.original_filename} value={item.offset_seconds}
                   onChange={e => { stop(); const offset = Math.max(0, Math.min(300, Number(e.target.value) || 0)); edit(p => ({ ...p, composition_data: { ...p.composition_data, tracks: p.composition_data.tracks.map(t => t.track_id === item.track_id ? { ...t, offset_seconds: offset } : t) } })); }} />s</label>
+                <label className="offset-control">Tempo <input type="number" min={0.5} max={2} step={0.01} aria-label={"Tempo ratio for " + track.original_filename} value={item.tempo_ratio ?? 1}
+                  onChange={e => { stop(); const tempo_ratio = Math.max(.5, Math.min(2, Number(e.target.value) || 1)); edit(p => ({ ...p, composition_data: { ...p.composition_data, tracks: p.composition_data.tracks.map(t => t.track_id === item.track_id ? { ...t, tempo_ratio } : t) } })); }} />×</label>
+                <label className="offset-control">Pitch <input type="number" min={-12} max={12} step={0.1} aria-label={"Pitch semitones for " + track.original_filename} value={item.pitch_semitones ?? 0}
+                  onChange={e => { stop(); const pitch_semitones = Math.max(-12, Math.min(12, Number(e.target.value) || 0)); edit(p => ({ ...p, composition_data: { ...p.composition_data, tracks: p.composition_data.tracks.map(t => t.track_id === item.track_id ? { ...t, pitch_semitones } : t) } })); }} /> st</label>
                 <button className="remove-button" title="Remove from session" aria-label={"Remove " + track.original_filename} onClick={() => { stop(); edit(p => ({ ...p, composition_data: { ...p.composition_data, tracks: p.composition_data.tracks.filter(t => t.track_id !== track.track_id) } })); }}>×</button>
               </div>
               {!collapsed[track.track_id] && track.stems.map(stem => {
@@ -296,6 +302,7 @@ export default function Studio() {
                   <label className="stem-volume"><input aria-label={"Volume " + stem.stem_type + " " + track.original_filename} type="range" min={0} max={1} step={0.01} value={control.volume} onChange={e => stemEdit(track.track_id, stem.stem_type, { volume: Number(e.target.value) })} /><span>{Math.round(control.volume * 100)}</span></label>
                 </div>;
               })}
+              {collapsed[track.track_id] && <div className="lazy-note">Stems are unloaded while collapsed. Expand this track to load its audio.</div>}
             </section>;
           })}
           <div className="arrangement-tip"><span>＋</span> Add another track from your library to build your mix.</div>

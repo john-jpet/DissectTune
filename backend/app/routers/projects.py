@@ -42,7 +42,7 @@ def create_project(payload: MixProjectCreate, db: Session = Depends(get_db),
     project = MixProject(user_id=user.id, title=payload.title,
         master_bpm=tracks[0].bpm if tracks else None,
         composition_data={"master_volume": 0.8, "tracks": [{
-            "track_id": str(track.id), "offset_seconds": 0,
+            "track_id": str(track.id), "offset_seconds": 0, "tempo_ratio": 1, "pitch_semitones": 0,
             "stems": {stem.stem_type.value: {"active": True, "solo": False, "volume": 1}
                       for stem in track.stems}} for track in tracks]})
     db.add(project)

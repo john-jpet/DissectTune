@@ -45,8 +45,9 @@ GPU execution was not tested; the verified worker is CPU-only.
 This is a local MVP. Public hosting still needs deployment configuration, HTTPS,
 non-default infrastructure credentials, a strong AUTH_SECRET, reverse-proxy rate/body
 limits, and an operational backup policy. No public deployment or Git push was made.
-Automatic beat alignment, pitch/tempo processing, effects, MP3 export, collaboration,
-password reset and email verification remain outside the implemented scope.
+Automatic beat alignment, effects, MP3 export, collaboration, password reset and email
+verification remain outside the implemented scope. Per-track tempo/pitch controls and
+collapsed-track lazy stem loading are implemented in the studio.
 
 ## Reproduce the live browser check
 

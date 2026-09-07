@@ -39,6 +39,8 @@ class CompositionTrack(BaseModel):
     model_config = ConfigDict(extra="forbid")
     track_id: uuid.UUID
     offset_seconds: float = Field(default=0, ge=0, le=300, allow_inf_nan=False)
+    tempo_ratio: float = Field(default=1, ge=0.5, le=2, allow_inf_nan=False)
+    pitch_semitones: float = Field(default=0, ge=-12, le=12, allow_inf_nan=False)
     stems: dict[StemType, StemSettings] = Field(default_factory=dict)
 
 

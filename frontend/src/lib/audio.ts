@@ -1,6 +1,6 @@
 import { Composition, TrackStatusResponse, request } from "./api";
 
-export type Voice = { id: string; buffer: AudioBuffer; offset: number; volume: number };
+export type Voice = { id: string; buffer: AudioBuffer; offset: number; volume: number; tempoRatio: number; pitchSemitones: number };
 export function audibleVoices(composition: Composition, tracks: TrackStatusResponse[], buffers: Map<string, AudioBuffer>): Voice[] {
   const hasSolo = composition.tracks.some(t => Object.values(t.stems).some(s => s.solo));
   return composition.tracks.flatMap(t => {
@@ -8,7 +8,8 @@ export function audibleVoices(composition: Composition, tracks: TrackStatusRespo
     return (track?.stems || []).flatMap(stem => {
       const config = t.stems[stem.stem_type], buffer = buffers.get(stem.id);
       return config && buffer ? [{
-        id: stem.id, buffer, offset: t.offset_seconds,
+        id: stem.id, buffer, offset: t.offset_seconds, tempoRatio: t.tempo_ratio ?? 1,
+        pitchSemitones: t.pitch_semitones ?? 0,
         volume: config.active && (!hasSolo || config.solo) ? config.volume : 0,
       }] : [];
     });
@@ -18,7 +19,8 @@ export function scheduleVoice(ctx: BaseAudioContext, voice: Voice, destination: 
   const skip = Math.max(0, position - voice.offset);
   if (skip >= voice.buffer.duration) return null;
   const source = ctx.createBufferSource(), gain = ctx.createGain();
-  source.buffer = voice.buffer; gain.gain.value = voice.volume;
+  source.buffer = voice.buffer; source.playbackRate.value = voice.tempoRatio;
+  source.detune.value = voice.pitchSemitones * 100; gain.gain.value = voice.volume;
   source.connect(gain).connect(destination);
   source.start(when + Math.max(0, voice.offset - position), skip);
   return { source, gain, id: voice.id };
