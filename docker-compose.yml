@@ -45,7 +45,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT_URL: http://minio:9000
       S3_REGION: us-east-1
-    ports: ["127.0.0.1:8000:8000"]
+    ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -68,9 +68,12 @@ services:
     command: celery -A app.celery_app worker --loglevel=info --concurrency=1
     volumes: ["model_cache:/root/.cache"]
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-8000}
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-8000}
     ports: ["127.0.0.1:3000:3000"]
     depends_on:
       api: {condition: service_healthy}
