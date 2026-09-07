@@ -18,6 +18,7 @@ from app.tasks import process_track
 
 router = APIRouter(prefix="/api/tracks", tags=["tracks"])
 ALLOWED_EXTENSIONS = {".mp3", ".wav", ".flac"}
+STEM_ORDER = {name: index for index, name in enumerate(("vocals", "drums", "bass", "other"))}
 
 
 def serialize(track):
@@ -28,7 +29,8 @@ def serialize(track):
             track.updated_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc) - timedelta(minutes=75)),
         original_filename=track.original_filename, error_message=track.error_message,
         stems=[{"id": s.id, "stem_type": s.stem_type,
-                "stem_url": f"/api/tracks/{track.id}/stems/{s.id}/audio"} for s in track.stems])
+                "stem_url": f"/api/tracks/{track.id}/stems/{s.id}/audio"}
+               for s in sorted(track.stems, key=lambda stem: STEM_ORDER[stem.stem_type.value])])
 
 
 def owned_track(db, track_id, user):

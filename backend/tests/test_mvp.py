@@ -96,6 +96,7 @@ def test_project_validation_and_private_audio(setup):
     track = client.get(f"/api/tracks/{track_id}/status", headers=headers).json()
     audio_url = track["stems"][0]["stem_url"]
     assert audio_url.startswith("/api/tracks/")
+    assert [s["stem_type"] for s in track["stems"]] == ["vocals", "drums", "bass", "other"]
     assert client.get(audio_url).status_code == 401
     from botocore.response import StreamingBody
     with patch("app.routers.tracks.get_s3_client") as storage:
@@ -159,3 +160,12 @@ def test_worker_claim_and_stem_replacement(setup, tmp_path):
         assert track.status == TrackStatus.completed
         assert track.bpm == 123
         assert len(track.stems) == 4
+
+
+def test_silent_audio_has_unknown_metadata(tmp_path):
+    import numpy as np
+    import soundfile as sf
+    from app.services.analysis import analyze_bpm_and_key
+    path = tmp_path / "silence.wav"
+    sf.write(path, np.zeros(22050, dtype=np.float32), 22050)
+    assert analyze_bpm_and_key(str(path)) == (None, None)

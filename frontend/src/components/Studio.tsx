@@ -108,7 +108,7 @@ export default function Studio() {
   }, []);
   const stemSignature = activeTracks.flatMap(t => t.stems.map(s => s.id)).join(",");
   useEffect(() => {
-    if (!selectedIds || !stemSignature) { setAudioReady(false); return; }
+    if (!selectedIds || !stemSignature) { mixer.current?.buffers.clear(); setAudioReady(false); return; }
     const controller = new AbortController();
     if (!mixer.current) mixer.current = new Mixer();
     stop(); setAudioReady(false); setAudioState("Loading audio…");
@@ -278,7 +278,7 @@ export default function Studio() {
             if (!track) return <p key={item.track_id}>Loading track…</p>;
             return <section className="track-group" key={track.track_id}>
               <div className="track-heading"><button className="collapse-button" aria-label={"Toggle " + track.original_filename} aria-expanded={!collapsed[track.track_id]} onClick={() => setCollapsed(c => ({ ...c, [track.track_id]: !c[track.track_id] }))}>{collapsed[track.track_id] ? "▸" : "▾"}</button>
-                <span className="track-number">{String(index + 1).padStart(2, "0")}</span><strong>{track.original_filename}</strong><span className="track-meta">{track.bpm} BPM <b>·</b> {track.key}</span>
+                <span className="track-number">{String(index + 1).padStart(2, "0")}</span><strong>{track.original_filename}</strong><span className="track-meta">{track.bpm ?? "—"} BPM <b>·</b> {track.key ?? "—"}</span>
                 <label className="offset-control">Start <input type="number" min={0} max={300} step={0.1} aria-label={"Start offset for " + track.original_filename} value={item.offset_seconds}
                   onChange={e => { stop(); const offset = Math.max(0, Math.min(300, Number(e.target.value) || 0)); edit(p => ({ ...p, composition_data: { ...p.composition_data, tracks: p.composition_data.tracks.map(t => t.track_id === item.track_id ? { ...t, offset_seconds: offset } : t) } })); }} />s</label>
                 <button className="remove-button" title="Remove from session" aria-label={"Remove " + track.original_filename} onClick={() => { stop(); edit(p => ({ ...p, composition_data: { ...p.composition_data, tracks: p.composition_data.tracks.filter(t => t.track_id !== track.track_id) } })); }}>×</button>

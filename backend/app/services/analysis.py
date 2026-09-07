@@ -8,19 +8,22 @@ MAJOR_PROFILE = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 
 MINOR_PROFILE = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
 
 
-def analyze_bpm_and_key(audio_path: str) -> tuple[float, str]:
+def analyze_bpm_and_key(audio_path: str) -> tuple[float | None, str | None]:
     import librosa
 
-    y, sr = librosa.load(audio_path, sr=None, mono=True)
+    y, sr = librosa.load(audio_path, sr=22050, mono=True)
+    if len(y) < 2048 or not np.isfinite(y).all() or np.max(np.abs(y)) < 1e-5:
+        return None, None
 
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
     bpm = float(np.atleast_1d(tempo)[0])
+    bpm = round(bpm, 1) if np.isfinite(bpm) and 20 <= bpm <= 400 else None
 
     chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
     chroma_mean = chroma.mean(axis=1)
 
     best_score = -np.inf
-    best_key = "C"
+    best_key = None
     for shift in range(12):
         major_corr = np.corrcoef(np.roll(MAJOR_PROFILE, shift), chroma_mean)[0, 1]
         minor_corr = np.corrcoef(np.roll(MINOR_PROFILE, shift), chroma_mean)[0, 1]
@@ -32,4 +35,4 @@ def analyze_bpm_and_key(audio_path: str) -> tuple[float, str]:
             best_score = minor_corr
             best_key = f"{NOTE_NAMES[shift]}m"
 
-    return round(bpm, 1), best_key
+    return bpm, best_key

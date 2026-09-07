@@ -27,7 +27,9 @@ export async function request(path: string, init: RequestInit = {}) {
   const res = await fetch(API_BASE_URL + path, { ...init, headers, cache: "no-store" });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    const detail = typeof data.detail === "string" ? data.detail : "Request failed (" + res.status + ")";
+    const detail = typeof data.detail === "string" ? data.detail : Array.isArray(data.detail)
+      ? data.detail.map((item: { loc?: string[]; msg?: string }) => (item.loc?.slice(1).join(".") || "Input") + ": " + item.msg).join("; ")
+      : "Request failed (" + res.status + ")";
     throw new Error(detail);
   }
   return res;
