@@ -39,7 +39,7 @@ the local database/storage for inspection.
 
 The inference check uses generated tonal/rhythmic audio, not a listening-quality
 benchmark on full songs. Full-length processing time and maximum-size browser memory
-use were not benchmarked. The editor applies a decoded-audio budget and upload limits.
+use were not benchmarked. The editor applies a temporary 1 GB decoded-audio budget and upload limits.
 GPU execution was not tested; the verified worker is CPU-only.
 
 This is a local MVP. Public hosting still needs deployment configuration, HTTPS,

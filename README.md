@@ -62,7 +62,7 @@ summing sources distorts: the WAV encoder clamps samples to PCM range, without n
 ## Limits and deferred features
 
 - 50 MB / 300 seconds per source and four tracks per project by default.
-- A 512 MB estimated decoded-audio budget protects browser memory. Long mixes may
+- A temporary 1 GB estimated decoded-audio budget protects browser memory. Long mixes may
   require shorter tracks or fewer songs. Desktop browsers are the primary editor target.
 - BPM/key are estimates. Alignment is manual; automatic beat matching, pitch shifting,
   tempo stretching, effects and MP3 export are deferred.

@@ -24,6 +24,8 @@ export function scheduleVoice(ctx: BaseAudioContext, voice: Voice, destination: 
   return { source, gain, id: voice.id };
 }
 export class Mixer {
+  // Temporary headroom for two full-length songs while lazy stem loading is deferred.
+  static readonly MAX_DECODED_AUDIO_BYTES = 1024 * 1024 * 1024;
   context: AudioContext;
   master: GainNode;
   buffers = new Map<string, AudioBuffer>();
@@ -39,7 +41,7 @@ export class Mixer {
   }
   async load(tracks: TrackStatusResponse[], signal: AbortSignal, progress: (done: number, total: number) => void) {
     const estimatedBytes = tracks.reduce((total, t) => total + (t.duration || 0) * 44100 * 2 * 4 * t.stems.length, 0);
-    if (estimatedBytes > 512 * 1024 * 1024) throw new Error("This mix exceeds the browser's 512 MB audio budget. Use shorter tracks or fewer songs.");
+    if (estimatedBytes > Mixer.MAX_DECODED_AUDIO_BYTES) throw new Error("This mix exceeds the browser's 1 GB audio budget. Use shorter tracks or fewer songs.");
     const stems = tracks.flatMap(t => t.stems);
     const keep = new Set(stems.map(s => s.id));
     for (const id of this.buffers.keys()) if (!keep.has(id)) this.buffers.delete(id);
