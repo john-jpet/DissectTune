@@ -66,7 +66,7 @@ summing sources distorts: the WAV encoder clamps samples to PCM range, without n
   require shorter tracks or fewer songs. Desktop browsers are the primary editor target.
 - BPM/key are estimates and alignment is manual. Each track can be adjusted independently
   from 0.5x–2x tempo and -12–+12 semitones pitch; these controls use browser Web Audio
-  playback-rate and detune processing and are included in WAV export. Automatic beat
+  pitch-preserving time-stretching and independent pitch shifting, and are included in WAV export. Automatic beat
   matching, effects and MP3 export are deferred.
 - Collapsing a track unloads its stems from the browser mixer; expanding it loads them
   again on demand. This keeps inactive tracks from consuming decoded-audio memory.
@@ -102,10 +102,11 @@ get_s3_client().download_file(settings.s3_bucket_name, object_key(key), dest_pat
 ```
 
 The browser fetches owned stems through authenticated API endpoints, never public
-bucket URLs. The shared engine schedules every source against one audio clock:
+bucket URLs. Unchanged voices use native Web Audio; adjusted voices use SoundTouch
+processing for both live playback and offline export:
 
 ```typescript
-source.start(when + Math.max(0, voice.offset - position), skip);
+scheduleVoice(context, voice, master, when, position);
 ```
 
 Export uses that same scheduler inside `OfflineAudioContext`. Composition JSON stores
@@ -156,7 +157,7 @@ Native development uses Turbopack because Webpack rejects paths containing `!`, 
 as this checkout's parent directory. Production builds run in Docker at `/app`;
 a native production build requires a checkout path without `!`.
 
-## Hosting considerations
+## Public hosting
 
 Compose is configured for local operation. Before public hosting, set
 `APP_ENV=production` and a random `AUTH_SECRET` of at least 32 characters; the API
