@@ -66,7 +66,10 @@ test("mix two tracks, save, restore, seek, and export a valid WAV", async ({ pag
   expect(exported.toString("ascii", 0, 4)).toBe("RIFF");
   expect(exported.readUInt16LE(22)).toBe(2);
   expect(exported.readUInt32LE(24)).toBe(44100);
-  expect(exported.readUInt32LE(40)).toBe(2.5 * 44100 * 4);
+  // Tempo changes preserve pitch and therefore change the rendered duration.
+  // Afterglow starts at 0.5s and is stretched to 2 / 1.1 seconds.
+  const expectedDuration = 0.5 + 2 / 1.1;
+  expect(exported.readUInt32LE(40)).toBe(Math.ceil(expectedDuration * 44100) * 4);
   await page.reload();
   await page.getByRole("button", { name: "Midnight rework" }).click();
   await expect(page.locator(".stem-lane")).toHaveCount(8);
