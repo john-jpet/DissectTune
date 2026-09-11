@@ -1,4 +1,5 @@
 import { Composition, TrackStatusResponse, request } from "./api";
+import * as SoundTouch from "soundtouchjs";
 
 export type Voice = { id: string; buffer: AudioBuffer; offset: number; volume: number; tempoRatio: number; pitchSemitones: number };
 export function audibleVoices(composition: Composition, tracks: TrackStatusResponse[], buffers: Map<string, AudioBuffer>): Voice[] {
@@ -18,9 +19,26 @@ export function audibleVoices(composition: Composition, tracks: TrackStatusRespo
 export function scheduleVoice(ctx: BaseAudioContext, voice: Voice, destination: AudioNode, when: number, position: number) {
   const skip = Math.max(0, position - voice.offset);
   if (skip >= voice.buffer.duration) return null;
-  const source = ctx.createBufferSource(), gain = ctx.createGain();
-  source.buffer = voice.buffer; source.playbackRate.value = voice.tempoRatio;
-  source.detune.value = voice.pitchSemitones * 100; gain.gain.value = voice.volume;
+  const gain = ctx.createGain();
+  gain.gain.value = voice.volume;
+  const delay = Math.max(0, voice.offset - position);
+  // Native playbackRate couples tempo and pitch. SoundTouch separates them.
+  const Shifter = SoundTouch.PitchShifter;
+  if ((voice.tempoRatio !== 1 || voice.pitchSemitones !== 0) && Shifter) {
+    const shifter = new Shifter(ctx as AudioContext, voice.buffer, 2048);
+    const delayNode = ctx.createDelay(Math.max(1, delay + 0.1));
+    delayNode.delayTime.value = delay;
+    shifter.tempo = voice.tempoRatio;
+    shifter.pitchSemitones = voice.pitchSemitones;
+    shifter.sourcePosition = Math.floor(skip * voice.buffer.sampleRate);
+    shifter.connect(gain);
+    gain.connect(delayNode).connect(destination);
+    return { source: { stop: () => { shifter.disconnect(); delayNode.disconnect(); }, disconnect: () => { shifter.disconnect(); delayNode.disconnect(); } }, gain, id: voice.id };
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = voice.buffer;
+  source.playbackRate.value = voice.tempoRatio;
+  source.detune.value = voice.pitchSemitones * 100;
   source.connect(gain).connect(destination);
   source.start(when + Math.max(0, voice.offset - position), skip);
   return { source, gain, id: voice.id };
